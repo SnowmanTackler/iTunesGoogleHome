@@ -1,0 +1,9 @@
+[submodule "Libraries/websocket-sharp"]
+	path = Libraries/websocket-sharp
+	url = https://github.com/sta/websocket-sharp.git
+[submodule "Libraries/PushbulletSharp"]
+	path = Libraries/PushbulletSharp
+	url = https://github.com/adamyeager/PushbulletSharp.git
+[submodule "Libraries/SamSeifert.Utilities"]
+	path = Libraries/SamSeifert.Utilities
+	url = https://github.com/SnowmanTackler/SamSeifert.Utilities.git
