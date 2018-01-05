@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,19 +21,19 @@ using PushbulletSharp.Models.Responses;
 
 using Logger = SamSeifert.Utilities.Logger;
 using SamSeifert.Utilities.DataStructures;
-using System.IO;
 using SamSeifert.Utilities;
 
 namespace iTunesGoogleHome
 {
-    public partial class Form1 : Form
+    public partial class MainForm : Form
     {
         DateTime lastChecked = DateTime.Now;
-        public PushbulletClient Client;
-        WebSocket ws;
+        private PushbulletClient Client;
+        private WebSocket ws;
 
         public bool _HesDeadJim = false;
 
+        private bool _FirstSearch = true;
         private EditDistanceDict<String> _Playlists = new EditDistanceDict<String>();
         private EditDistanceDict<String> _Songs = new EditDistanceDict<String>();
         private EditDistanceDict<String> _Artists = new EditDistanceDict<String>();
@@ -40,28 +41,68 @@ namespace iTunesGoogleHome
         private EditDistanceDict<String> _Song_Artists = new EditDistanceDict<String>();
         private EditDistanceDict<String> _Album_Artists = new EditDistanceDict<String>();
 
-        public Form1()
+        public MainForm()
         {
             InitializeComponent();
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private void MainForm_Load(object sender, EventArgs e)
         {
-            Logger.Writer = (String s) =>
+            var tb = this.tbConsole;
+            Logger.WriterSupportTabs = new Action<string, string>((String ln, String tab) =>
             {
-                Console.WriteLine(DateTime.Now + " " + s);
-            };
-
-            this.RefreshItunesData();
+                MainForm.ThreadSafeTextBoxWrite(tb, ln, tab);
+            });
 
             this.LoadFormState();
 
-            this.textBox1.Text = TextSettings.Read("pbkey.txt") ?? "";
+            this.tbPushBullet.Text = TextSettings.Read("pbkey.txt") ?? "";
+            this.ActiveControl = this.label1; // Prevents textbox text from starting highlighted
 
             this.bStartPushbullet_Click(sender, e);
         }
 
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if ((!_HesDeadJim) && (this.WindowState != FormWindowState.Minimized))
+            {
+                this.SaveFormState();
+                this.WindowState = FormWindowState.Minimized;
+                e.Cancel = true;
+            }
+            else
+            {
+
+                this.CeaseAndDesist();
+            }
+        }
+
+        private void _NotifyIcon_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (MouseButtons.None != (e.Button & MouseButtons.Left))
+            {
+                if (this.WindowState == FormWindowState.Minimized)
+                {
+                    this.WindowState = FormWindowState.Normal;
+                }
+                else
+                {
+                    this.WindowState = FormWindowState.Minimized;
+                }
+            }
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Exiting will prevent Google Home from controlling iTunes", "Are you sure?", MessageBoxButtons.OKCancel)
+                == DialogResult.OK)
+            {
+                this.CeaseAndDesist(); // 
+                this.Close();
+            }
+        }
+
+        private void CeaseAndDesist()
         {
             this._HesDeadJim = true;
 
@@ -71,22 +112,41 @@ namespace iTunesGoogleHome
                 this.ws = null;
             }
 
-            TextSettings.Save("pbkey.txt", this.textBox1.Text);
+            if (!this.tbPushBullet.IsDisposed)
+            {
+                TextSettings.Save("pbkey.txt", this.tbPushBullet.Text);
+            }
+        }
 
-            this.SaveFormState();
+        private static void ThreadSafeTextBoxWrite(TextBox tb, String ln, String tab = "")
+        {
+            if (ln.Length != 0)
+                ln = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff ") + tab + ln;
+
+            Console.WriteLine(ln);
+
+            if (tb == null) return;
+            if (tb.IsDisposed) return;
+
+            var act = new Action(() => {
+                tb.AppendText(ln + Environment.NewLine);
+            });
+
+            if (tb.InvokeRequired) tb.BeginInvoke(act); // Don't Wait
+            else act();
         }
 
         private void bStartPushbullet_Click(object sender, EventArgs e)
         {
-            string key = this.textBox1.Text.Trim();
+            string key = this.tbPushBullet.Text.Trim();
             if (key.Length > 0)
             {
                 this.Client = new PushbulletClient(key, TimeZoneInfo.Local);
                 ws = new WebSocket(string.Concat("wss://stream.pushbullet.com/websocket/", key));
                 ws.OnMessage += Ws_OnMessage;
                 ws.Connect();
+                this.bStartPushbullet.Enabled = false;
             }
-            this.bStartPushbullet.Enabled = false;
         }
 
         private void Ws_OnMessage(object sender, MessageEventArgs e)
@@ -100,7 +160,7 @@ namespace iTunesGoogleHome
             {
                 // Heartbeat
                 case "nop":
-                    Logger.WriteLine("Heartbeat");
+                    Logger.WriteLine("PushBullet Heartbeat");
                     break;
                 case "tickle":
                     PushResponseFilter filter = new PushResponseFilter()
@@ -117,8 +177,8 @@ namespace iTunesGoogleHome
                             lastChecked = push.Created;
                             this.NewNotification(push);
                         }
+                        else Logger.WriteLine("Ignoring Old PushBullet: " + push.Title);
                     }
-
                     break;
                 case "push":
                     Logger.WriteLine(string.Format("New push recieved on {0}.", DateTime.Now));
@@ -126,7 +186,7 @@ namespace iTunesGoogleHome
                     Logger.WriteLine("Response SubType: " + response.Subtype);
                     break;
                 default:
-                    Logger.WriteLine("new type that is not supported");
+                    Logger.WriteLine("PushBullet type not supported!");
                     break;
             }
         }
@@ -152,13 +212,21 @@ namespace iTunesGoogleHome
                     Logger.WriteLine("Volume Down");
                     break;
                 case "play":
+                case "play music":
+                case "play all music":
+                case "play all":
+                case "play all songs":
+                case "play songs":
                     var trimmed = push.Body?.Trim() ?? "";
                     if (trimmed.Length == 0)
                     {
                         (new iTunesAppClass())?.Play();
                         Logger.WriteLine("Empty Play");
                     }
-                    else this.FindBestMatchAndPlay(trimmed);
+                    else
+                    {
+                        this.FindBestMatchAndPlay(trimmed);
+                    }
                     break;
                 default:
                     Logger.WriteError(this, "Unrecognized Title: " + push.Title);
@@ -166,7 +234,7 @@ namespace iTunesGoogleHome
             }
         }
 
-        const string middle = "*&J@";
+        const string middle = " & "; // this is ok because ampersands are all removed from queries
         string jjoin(String a1, String a2) { return a1 + middle + a2; }
         void ujoin(String inp, out String a1, out String a2)
         {
@@ -206,80 +274,95 @@ namespace iTunesGoogleHome
             album_artist
         }
 
-        private void RefreshItunesData(iTunesApp itunes = null)
+        private void RefreshItunesData(iTunesApp itunes = null, bool use_songs = false)
         {
-            Logger.WriteLine("Refreshing Data");
-
-            if (itunes == null)
-                itunes = new iTunesLib.iTunesApp();
-
-            this._Songs.Clear();
-            this._Song_Artists.Clear();
-            this._Albums.Clear();
-            this._Album_Artists.Clear();
-            this._Artists.Clear();
-            this._Playlists.Clear();
-
-            foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
+            using (Logger.Time("Refreshing iTunes Data"))
             {
-                if (track.Kind != ITTrackKind.ITTrackKindFile) continue;
-                
-                // IITFileOrCDTrack file = (IITFileOrCDTrack)track;
-                // FileInfo fi = new FileInfo(file.Location);
+                if (itunes == null)
+                    itunes = new iTunesLib.iTunesApp();
 
-                string song_key = track.Name.ToLower();
-                string artist_key = track.Artist.ToLower();
-                string album_key = track.Album.ToLower();
+                this._Songs.Clear();
+                this._Song_Artists.Clear();
+                this._Albums.Clear();
+                this._Album_Artists.Clear();
+                this._Artists.Clear();
+                this._Playlists.Clear();
 
-                _Artists[artist_key] = track.Artist;
-                _Artists["artist " + artist_key] = track.Artist;
-                _Songs[song_key] = track.Name;
-                _Songs["song " + song_key] = track.Name;
-                _Albums[album_key] = track.Album;
-                _Albums["album " + album_key] = track.Album;
-
-                String jjoined_key;
-                String jjoined_val;
-
-                jjoined_key = jjoin(song_key, artist_key);
-                jjoined_val = jjoin(track.Name, track.Artist);
-                _Song_Artists[jjoined_key] = jjoined_val;
-                _Song_Artists["song " + jjoined_key] = jjoined_val;
-
-                jjoined_key = jjoin(album_key, artist_key);
-                jjoined_val = jjoin(track.Album, track.Artist);
-                _Album_Artists[jjoined_key] = jjoined_val;
-                _Album_Artists["album " + jjoined_key] = jjoined_val;
-            }
-
-            // get list of all playlists defined in 
-            // Itunes and add them to the combobox
-            foreach (IITPlaylist pl in itunes.LibrarySource.Playlists)
-            {
-                switch (pl.Name)
+                foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
                 {
-                    case "Library": // Defaults.  Ignore these
-                    case "Music":
-                    case "Movies":
-                    case "TV Shows":
-                    case "Podcasts":
-                    case "Audiobooks":
-                    case "Genius":
-                        break;
-                    default:
-                        String playlist_key = pl.Name.ToLower();
-                        this._Playlists[playlist_key] = pl.Name;
-                        this._Playlists["playlist " + playlist_key] = pl.Name;
-                        this._Playlists[playlist_key + " playlist"] = pl.Name;
-                        break;
-                }
-            }
+                    if (track.Kind != ITTrackKind.ITTrackKindFile) continue;
 
-            // divide 2 becuase we add everything to the dictionaries twice.  Once raw, and once with qualifier
-            Logger.WriteLine(this._Songs.Count / 2 + " Songs!");
-            Logger.WriteLine(this._Albums.Count / 2 + " Albums!");
-            Logger.WriteLine(this._Artists.Count / 2 + " Artists!");
-            Logger.WriteLine(this._Playlists.Count / 2 + " Playlists!");
+                    // IITFileOrCDTrack file = (IITFileOrCDTrack)track;
+                    // FileInfo fi = new FileInfo(file.Location);
+
+                    Func<String, String> to_key = s =>
+                    {
+                        return s.ToLower()
+                        .Replace("&", " and ") // "women & songs" => "Women and songs"
+                        .Trim()
+                        .RemoveDoubleSpaces()
+                        ;
+                    };
+
+                    string song_key = to_key(track.Name);
+                    string artist_key = to_key(track.Artist);
+                    string album_key = to_key(track.Album);
+
+                    _Artists[artist_key] = track.Artist;
+                    _Artists["artist " + artist_key] = track.Artist;
+
+                    String jjoined_key;
+                    String jjoined_val;
+
+                    if (use_songs) // Songs too slow on home computer.  Don't populate List
+                    {
+                        _Songs[song_key] = track.Name;
+                        _Songs["song " + song_key] = track.Name;
+                        jjoined_key = jjoin(song_key, artist_key);
+                        jjoined_val = jjoin(track.Name, track.Artist);
+                        _Song_Artists[jjoined_key] = jjoined_val;
+                        _Song_Artists["song " + jjoined_key] = jjoined_val;
+                    }
+
+                    _Albums[album_key] = track.Album;
+                    _Albums["album " + album_key] = track.Album;
+                    jjoined_key = jjoin(album_key, artist_key);
+                    jjoined_val = jjoin(track.Album, track.Artist);
+                    _Album_Artists[jjoined_key] = jjoined_val;
+                    _Album_Artists["album " + jjoined_key] = jjoined_val;
+                }
+
+                // get list of all playlists defined in 
+                // Itunes and add them to the combobox
+                foreach (IITPlaylist pl in itunes.LibrarySource.Playlists)
+                {
+                    switch (pl.Name)
+                    {
+                        case "Library": // Defaults.  Ignore these
+                        case "Music":
+                        case "Movies":
+                        case "TV Shows":
+                        case "Podcasts":
+                        case "Audiobooks":
+                        case "Genius":
+                        case "Automated": // Ignore our own
+                            break;
+                        default:
+                            String playlist_key = pl.Name.ToLower();
+                            this._Playlists[playlist_key] = pl.Name;
+                            this._Playlists["playlist " + playlist_key] = pl.Name;
+                            this._Playlists[playlist_key + " playlist"] = pl.Name;
+                            break;
+                    }
+                }
+
+                // divide 2 becuase we add everything to the dictionaries twice.  Once raw, and once with qualifier
+                if (use_songs)
+                    Logger.WriteLine(this._Songs.Count / 2 + " Songs!");
+                Logger.WriteLine(this._Albums.Count / 2 + " Albums!");
+                Logger.WriteLine(this._Artists.Count / 2 + " Artists!");
+                Logger.WriteLine(this._Playlists.Count / 3 + " Playlists!");
+            }
         }
 
 
@@ -302,8 +385,26 @@ namespace iTunesGoogleHome
 
         private void FindBestMatchAndPlay(String query)
         {
-            var tup = FindBestMatch(query); // NLP
-            this.PlayMatched(tup.Item1, tup.Item2);
+            using (Logger.Time("Processing Request"))
+            {
+                iTunesAppClass itunes;
+
+                using (Logger.Time("Opening iTunes"))
+                    itunes = new iTunesAppClass();
+
+                using (Logger.Time("Pausing iTunes"))
+                    itunes.Stop(); // Makes it seem more responsive
+
+                if (this._FirstSearch) this.RefreshItunesData();
+                this._FirstSearch = false;
+
+                Tuple<String, MatchType> tup;
+                using (Logger.Time("Finding Match"))
+                    tup = FindBestMatch(query); // NLP
+                using (Logger.Time("Working iTunes"))
+                    this.PlayMatched(itunes, tup.Item1, tup.Item2);
+                MainForm.ThreadSafeTextBoxWrite(this.tbMatches, "Matched \"" + query + "\" to " + tup.Item2 + " \"" + tup.Item1 + "\"", "");
+            }
         }
 
         private Tuple<String, MatchType> FindBestMatch(String original_query)
@@ -316,8 +417,10 @@ namespace iTunesGoogleHome
 
             Action<String, MatchType, EditDistanceDict<String>> checker = (String key, MatchType t, EditDistanceDict<String> dict) =>
             {
+                if (dict.Count == 0) return;
                 if (best_score <= 0) // don't even bother.  Let's increase response time!
                     return;
+
 
                 String current_match = null;
                 String current_key = null;
@@ -356,47 +459,43 @@ namespace iTunesGoogleHome
                 else break;
             }
 
-            if (best_score > 0)
-                Logger.WriteLine("Matching \"" + original_query + "\" to: \"" + best_match + "\", " + best_matchtype);
-
             return new Tuple<String, MatchType>(best_match, best_matchtype);
         }
 
-        private void PlayMatched(String best_match, MatchType best_matchtype )
+        private void PlayMatched(iTunesApp itunes, String best_match, MatchType best_matchtype)
         {
             String temp_artist;
             switch (best_matchtype)
             {
                 case MatchType.song:
-                    this.PlayMatchedSong(best_match);
+                    this.PlayMatchedSong(itunes, best_match);
                     break;
                 case MatchType.song_artist:
                     String song;
                     ujoin(best_match, out song, out temp_artist);
-                    this.PlayMatchedSong(song, temp_artist);
+                    this.PlayMatchedSong(itunes, song, temp_artist);
                     break;
                 case MatchType.album:
-                    this.PlayMatchedAlbum(best_match);
+                    this.PlayMatchedAlbum(itunes, best_match);
                     break;
                 case MatchType.album_artist:
                     String album;
                     ujoin(best_match, out album, out temp_artist);
-                    this.PlayMatchedAlbum(album, temp_artist);
+                    this.PlayMatchedAlbum(itunes, album, temp_artist);
                     break;
                 case MatchType.artist:
-                    this.PlayMatchedArtist(best_match);
+                    this.PlayMatchedArtist(itunes, best_match);
                     break;
                 case MatchType.playlist:
-                    this.PlayMatchedPlaylist(best_match);
+                    this.PlayMatchedPlaylist(itunes, best_match);
                     break;
             }
         }
 
-        private void PlayMatchedPlaylist(String playlist)
+        private void PlayMatchedPlaylist(iTunesApp itunes, String playlist)
         {
             Logger.WriteLine("Playing Playlist: " + playlist);
 
-            var itunes = new iTunesLib.iTunesApp();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
             foreach (IITPlaylist pl in itunes.LibrarySource.Playlists)
             {
@@ -407,12 +506,11 @@ namespace iTunesGoogleHome
             this.RefreshItunesData(itunes);
         }
 
-        private void PlayMatchedSong(String song, String artist = null)
+        private void PlayMatchedSong(iTunesApp itunes, String song, String artist = null)
         {
             if (artist == null) Logger.WriteLine("Playing Song: " + song);
             else Logger.WriteLine("Playing Song: " + song + ", By: " + artist);
 
-            var itunes = new iTunesLib.iTunesApp();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
             foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
             {
@@ -426,12 +524,11 @@ namespace iTunesGoogleHome
             this.RefreshItunesData(itunes);
         }
 
-        private void PlayMatchedAlbum(String album, String artist = null)
+        private void PlayMatchedAlbum(iTunesApp itunes, String album, String artist = null)
         {
             if (artist == null) Logger.WriteLine("Playing Album: " + album);
             else Logger.WriteLine("Playing Album: " + album + ", By: " + artist);
 
-            var itunes = new iTunesLib.iTunesApp();
             var tracks = new List<IITTrack>();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
             foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
@@ -446,11 +543,10 @@ namespace iTunesGoogleHome
             else this.RefreshItunesData(itunes);
         }
 
-        private void PlayMatchedArtist(String artist)
+        private void PlayMatchedArtist(iTunesApp itunes, String artist)
         {
             Logger.WriteLine("Playing Artist: " + artist);
 
-            var itunes = new iTunesLib.iTunesApp();
             var tracks = new List<IITTrack>();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
             foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
@@ -482,14 +578,20 @@ namespace iTunesGoogleHome
             }
             while (pl != null);
 
-            pl = (IITUserPlaylist)(itunes.CreatePlaylist(automated_playlist_name));
-
-            Array.Sort(tracks, CompareTracks);
-
-            foreach (var t in tracks)
+            try
             {
-                object track = t;
-                pl.AddTrack(ref track);
+                Array.Sort(tracks, CompareTracks);
+                pl = (IITUserPlaylist)(itunes.CreatePlaylist(automated_playlist_name));
+                foreach (var t in tracks)
+                {
+                    object track = t;
+                    pl.AddTrack(ref track);
+                }
+            }
+            catch (Exception exc)
+            {
+                Logger.WriteException(this, "SetupAndRunAutomatedPlaylist", exc);
+                return;
             }
 
             this.PlayPlaylist(pl);
@@ -508,10 +610,23 @@ namespace iTunesGoogleHome
 
         private void PlayPlaylist(IITPlaylist pl)
         {
-            pl.PlayFirstTrack();
-            pl.SongRepeat = ITPlaylistRepeatMode.ITPlaylistRepeatModeAll;
-            pl.Shuffle = false;
+            try
+            {
+                if (pl.Tracks.Count != 0)
+                {
+                    pl.PlayFirstTrack();
+                    pl.SongRepeat = ITPlaylistRepeatMode.ITPlaylistRepeatModeAll;
+                    pl.Shuffle = false;
+                }
+            }
+            catch (Exception exc)
+            {
+                Logger.WriteException(this, "Play Playlist", exc);
+            }
         }
+
+
+
 
     }
 }
