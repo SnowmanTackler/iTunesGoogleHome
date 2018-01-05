@@ -31,7 +31,7 @@ namespace iTunesGoogleHome
         private PushbulletClient Client;
         private WebSocket ws;
 
-        public bool _HesDeadJim = false;
+        private volatile bool _HesDeadJim = false;
 
         private bool _FirstSearch = true;
         private EditDistanceDict<String> _Playlists = new EditDistanceDict<String>();
@@ -48,6 +48,8 @@ namespace iTunesGoogleHome
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            Logger.AddTab();
+            
             var tb = this.tbConsole;
             Logger.WriterSupportTabs = new Action<string, string>((String ln, String tab) =>
             {
@@ -64,15 +66,13 @@ namespace iTunesGoogleHome
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if ((!_HesDeadJim) && (this.WindowState != FormWindowState.Minimized))
+            if ((!_HesDeadJim) && (this.Visible))
             {
-                this.SaveFormState();
-                this.WindowState = FormWindowState.Minimized;
+                this.Hide();
                 e.Cancel = true;
             }
             else
             {
-
                 this.CeaseAndDesist();
             }
         }
@@ -80,16 +80,7 @@ namespace iTunesGoogleHome
         private void _NotifyIcon_MouseDown(object sender, MouseEventArgs e)
         {
             if (MouseButtons.None != (e.Button & MouseButtons.Left))
-            {
-                if (this.WindowState == FormWindowState.Minimized)
-                {
-                    this.WindowState = FormWindowState.Normal;
-                }
-                else
-                {
-                    this.WindowState = FormWindowState.Minimized;
-                }
-            }
+                this.Visible = !this.Visible;
         }
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
@@ -97,24 +88,29 @@ namespace iTunesGoogleHome
             if (MessageBox.Show("Exiting will prevent Google Home from controlling iTunes", "Are you sure?", MessageBoxButtons.OKCancel)
                 == DialogResult.OK)
             {
-                this.CeaseAndDesist(); // 
+                this.CeaseAndDesist();
                 this.Close();
             }
         }
 
         private void CeaseAndDesist()
         {
-            this._HesDeadJim = true;
-
-            if (this.ws != null)
+            if (!this._HesDeadJim)
             {
-                (this.ws as IDisposable).Dispose();
-                this.ws = null;
-            }
+                this._HesDeadJim = true;
 
-            if (!this.tbPushBullet.IsDisposed)
-            {
-                TextSettings.Save("pbkey.txt", this.tbPushBullet.Text);
+                this.SaveFormState();
+
+                if (this.ws != null)
+                {
+                    (this.ws as IDisposable).Dispose();
+                    this.ws = null;
+                }
+
+                if (!this.tbPushBullet.IsDisposed)
+                {
+                    TextSettings.Save("pbkey.txt", this.tbPushBullet.Text);
+                }
             }
         }
 
@@ -122,7 +118,7 @@ namespace iTunesGoogleHome
         {
             if (ln.Length != 0)
                 ln = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff ") + tab + ln;
-
+ 
             Console.WriteLine(ln);
 
             if (tb == null) return;
@@ -146,16 +142,30 @@ namespace iTunesGoogleHome
                 ws.OnMessage += Ws_OnMessage;
                 ws.Connect();
                 this.bStartPushbullet.Enabled = false;
+
+                // When We Connect, Hide (helpful on startup)
+                Action act = () => { this.Hide(); };
+                System.Threading.Timer timer = null;
+                timer = new System.Threading.Timer((obj) =>
+                {
+                    this.BeginInvoke(act);
+                    timer.Dispose();
+                }, null, 250, System.Threading.Timeout.Infinite);
             }
         }
 
         private void Ws_OnMessage(object sender, MessageEventArgs e)
         {
             if (this._HesDeadJim) return;
-
             JavaScriptSerializer js = new JavaScriptSerializer();
             WebSocketResponse response = js.Deserialize<WebSocketResponse>(e.Data);
+            this.BeginInvoke(new Action(() => {
+                this.HandleResponseMainThread(response);
+            }));
+        }
 
+        public void HandleResponseMainThread(WebSocketResponse response)
+        {
             switch (response.Type)
             {
                 // Heartbeat
@@ -175,7 +185,26 @@ namespace iTunesGoogleHome
                         if ((push.Created - lastChecked).TotalDays > 0)
                         {
                             lastChecked = push.Created;
-                            this.NewNotification(push);
+
+                            using (Logger.Time("Processing Request"))
+                            {
+                                for (int i = 0; i < 3; i++) // 3 attempts.
+                                {
+                                    using (Logger.Time("Attempt " + i))
+                                    {
+                                        try
+                                        {
+                                            this.NewNotification(push);
+                                            break;
+                                        }
+                                        catch (Exception exc)
+                                        {
+                                            Logger.WriteException(this, "FindBestMatchAndPlay", exc);
+                                            System.Threading.Thread.Sleep(500); // Give itunes a breath.
+                                        }
+                                    }
+                                }
+                            }
                         }
                         else Logger.WriteLine("Ignoring Old PushBullet: " + push.Title);
                     }
@@ -385,31 +414,38 @@ namespace iTunesGoogleHome
 
         private void FindBestMatchAndPlay(String query)
         {
-            using (Logger.Time("Processing Request"))
-            {
-                iTunesAppClass itunes;
+            Tuple<String, MatchType> tup;
+            iTunesAppClass itunes;
 
-                using (Logger.Time("Opening iTunes"))
-                    itunes = new iTunesAppClass();
+            using (Logger.Time("Opening iTunes"))
+                itunes = new iTunesAppClass();
 
-                using (Logger.Time("Pausing iTunes"))
-                    itunes.Stop(); // Makes it seem more responsive
+            using (Logger.Time("Pausing iTunes"))
+                itunes.Stop(); // Makes it seem more responsive
 
-                if (this._FirstSearch) this.RefreshItunesData();
-                this._FirstSearch = false;
+            if (this._FirstSearch) this.RefreshItunesData();
+            this._FirstSearch = false;
 
-                Tuple<String, MatchType> tup;
-                using (Logger.Time("Finding Match"))
-                    tup = FindBestMatch(query); // NLP
-                using (Logger.Time("Working iTunes"))
-                    this.PlayMatched(itunes, tup.Item1, tup.Item2);
-                MainForm.ThreadSafeTextBoxWrite(this.tbMatches, "Matched \"" + query + "\" to " + tup.Item2 + " \"" + tup.Item1 + "\"", "");
-            }
+            using (Logger.Time("Finding Match"))
+                tup = FindBestMatch(query); // NLP
+            using (Logger.Time("Working iTunes"))
+                this.PlayMatched(itunes, tup.Item1, tup.Item2);
+
+            MainForm.ThreadSafeTextBoxWrite(this.tbMatches, "\"" + query + "\" to " + tup.Item2 + " \"" + tup.Item1 + "\"", "");
+
         }
 
-        private Tuple<String, MatchType> FindBestMatch(String original_query)
+        private String UngoogleQuery(String q)
         {
-            var query = original_query.ToLower();
+            return (" " + q + " ")
+                .ToLower()
+                .Replace(" xmas ", " christmas ") // if you say "Christmas" google returns "Xmas"
+                .Trim();
+        }
+
+        private Tuple<String, MatchType> FindBestMatch(String query)
+        {
+            query = UngoogleQuery(query);
 
             MatchType best_matchtype = MatchType.nan;
             float best_score = float.MaxValue;
@@ -578,55 +614,63 @@ namespace iTunesGoogleHome
             }
             while (pl != null);
 
-            try
+            var sortable_tracks = tracks.Select(t => new SamTrack(t)).Sorted();
+            pl = (IITUserPlaylist)(itunes.CreatePlaylist(automated_playlist_name));
+            foreach (var t in sortable_tracks)
             {
-                Array.Sort(tracks, CompareTracks);
-                pl = (IITUserPlaylist)(itunes.CreatePlaylist(automated_playlist_name));
-                foreach (var t in tracks)
-                {
-                    object track = t;
-                    pl.AddTrack(ref track);
-                }
-            }
-            catch (Exception exc)
-            {
-                Logger.WriteException(this, "SetupAndRunAutomatedPlaylist", exc);
-                return;
+                object track = t._Track;
+                pl.AddTrack(ref track);
             }
 
             this.PlayPlaylist(pl);
         }
 
-        public static int CompareTracks(IITTrack t1, IITTrack t2)
-        {
-            int c = 0;
-
-            c = t1.Artist.CompareTo(t2.Artist); if (c != 0) return c;
-            c = t1.Album.CompareTo(t2.Album); if (c != 0) return c;
-            c = t1.TrackNumber.CompareTo(t2.TrackNumber); if (c != 0) return c;
-
-            return 0;
-        }
-
         private void PlayPlaylist(IITPlaylist pl)
         {
-            try
+            if (pl.Tracks.Count != 0)
             {
-                if (pl.Tracks.Count != 0)
-                {
-                    pl.PlayFirstTrack();
-                    pl.SongRepeat = ITPlaylistRepeatMode.ITPlaylistRepeatModeAll;
-                    pl.Shuffle = false;
-                }
-            }
-            catch (Exception exc)
-            {
-                Logger.WriteException(this, "Play Playlist", exc);
+                pl.PlayFirstTrack();
+                pl.SongRepeat = ITPlaylistRepeatMode.ITPlaylistRepeatModeAll;
+                pl.Shuffle = false;
             }
         }
 
 
 
 
+        /// <summary>
+        /// If you try to sort a bunch of IITTracks, you occassionally get the exception below.  I think (but am not certain) each call to IITTrack.Artist
+        /// has to go through iTunes, and sort requires daisy chaining too many calls like this together.  Causes COM library to poop out.  Solve this problem
+        /// by calling and storing each called variable 
+        /// </summary>
+        public class SamTrack : IComparable
+        {
+            public readonly IITTrack _Track;
+            private string _Album = null;
+            private string _Artist = null;
+            private int _TrackNumber = int.MinValue;
+
+            public SamTrack(IITTrack t)
+            {
+                this._Track = t;
+                this._Album = t.Album ?? "";
+                this._Artist = t.Artist ?? "";
+                this._TrackNumber = t.TrackNumber;
+            }
+
+            public int CompareTo(object obj)
+            {
+                var t1 = this;
+                var t2 = obj as SamTrack;
+
+                int c = 0;
+
+                c = t1._Artist.CompareTo(t2._Artist); if (c != 0) return c;
+                c = t1._Album.CompareTo(t2._Album); if (c != 0) return c;
+                c = t1._TrackNumber.CompareTo(t2._TrackNumber); if (c != 0) return c;
+
+                return 0;
+            }
+        }
     }
 }

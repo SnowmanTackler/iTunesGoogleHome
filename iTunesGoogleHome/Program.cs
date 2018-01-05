@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -15,10 +16,21 @@ namespace iTunesGoogleHome
         [STAThread]
         static void Main()
         {
-
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+
+            Mutex mutex = new Mutex(false, "iTunes Google Home Single Instance Mutex");
+            if (!mutex.WaitOne(0, false))
+            {
+                mutex.Close();
+                mutex = null;
+                MessageBox.Show("iTunes Google Home is already running!");
+            }
+            else
+            {
+                Application.Run(new MainForm());
+                mutex.ReleaseMutex();
+            }
         }
     }
 }
