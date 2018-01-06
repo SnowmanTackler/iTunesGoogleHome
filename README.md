@@ -1,7 +1,7 @@
 # iTunesGoogleHome
 Check out: blog_post_url
 
-#Build
+# Build
 
 In git compatible terminal:
 git clone <repo link>
