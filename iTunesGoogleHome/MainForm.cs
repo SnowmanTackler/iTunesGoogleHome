@@ -10,18 +10,14 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
 
-using iTunesLib;
-
+using PushbulletSharp;
 using PushbulletSharp.Filters;
 using PushbulletSharp.Models.Responses.WebSocket;
-using PushbulletSharp;
 
 using WebSocketSharp;
-using PushbulletSharp.Models.Responses;
 
-using Logger = SamSeifert.Utilities.Logger;
-using SamSeifert.Utilities.DataStructures;
 using SamSeifert.Utilities;
+using Logger = SamSeifert.Utilities.Logger;
 
 namespace iTunesGoogleHome
 {

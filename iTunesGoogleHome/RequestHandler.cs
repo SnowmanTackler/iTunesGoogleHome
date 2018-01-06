@@ -1,32 +1,32 @@
-﻿using iTunesLib;
-
-using PushbulletSharp.Models.Responses;
-
-using SamSeifert.Utilities;
-using SamSeifert.Utilities.DataStructures;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+using iTunesLib;
+
+using PushbulletSharp.Models.Responses;
+
+using SamSeifert.Utilities;
+using SamSeifert.Utilities.DataStructures;
+
 namespace iTunesGoogleHome
 {
     public class PushHandler
     {
-        const string automated_playlist_name = "Automated";
+        private const string automated_playlist_name = "Automated";
 
         private TextBox tbMatches;
 
         private bool _FirstSearch = true;
-        private EditDistanceDict<String> _Playlists = new EditDistanceDict<String>();
-        private EditDistanceDict<String> _Songs = new EditDistanceDict<String>();
-        private EditDistanceDict<String> _Artists = new EditDistanceDict<String>();
-        private EditDistanceDict<String> _Albums = new EditDistanceDict<String>();
-        private EditDistanceDict<String> _Song_Artists = new EditDistanceDict<String>();
-        private EditDistanceDict<String> _Album_Artists = new EditDistanceDict<String>();
+        private readonly EditDistanceDict<String> _Playlists = new EditDistanceDict<String>();
+        private readonly EditDistanceDict<String> _Songs = new EditDistanceDict<String>();
+        private readonly EditDistanceDict<String> _Artists = new EditDistanceDict<String>();
+        private readonly EditDistanceDict<String> _Albums = new EditDistanceDict<String>();
+        private readonly EditDistanceDict<String> _Song_Artists = new EditDistanceDict<String>();
+        private readonly EditDistanceDict<String> _Album_Artists = new EditDistanceDict<String>();
 
         public PushHandler(TextBox matches)
         {
@@ -39,11 +39,11 @@ namespace iTunesGoogleHome
             switch (push.Title)
             {
                 case "next":
-                    (new iTunesAppClass())?.NextTrack();
+                    new iTunesAppClass()?.NextTrack();
                     Logger.WriteLine("Next Track");
                     break;
                 case "pause":
-                    (new iTunesAppClass())?.Stop();
+                    new iTunesAppClass()?.Stop();
                     Logger.WriteLine("Pause");
                     break;
                 case "louder":
@@ -60,10 +60,11 @@ namespace iTunesGoogleHome
                 case "play all":
                 case "play all songs":
                 case "play songs":
+                case "play itunes":
                     var trimmed = push.Body?.Trim() ?? "";
                     if (trimmed.Length == 0)
                     {
-                        (new iTunesAppClass())?.Play();
+                        new iTunesAppClass()?.Resume();
                         Logger.WriteLine("Empty Play");
                     }
                     else
