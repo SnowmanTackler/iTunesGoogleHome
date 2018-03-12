@@ -361,7 +361,7 @@ namespace iTunesGoogleHome
         private void PlayMatchedSong(iTunesApp itunes, String song, String artist = null)
         {
             if (artist == null) Logger.WriteLine("Playing Song: " + song);
-            else Logger.WriteLine("Playing Song: " + song + ", By: " + artist);
+            else Logger.WriteLine("Playing Song: " + song + ", by " + artist);
 
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
             foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
@@ -379,7 +379,7 @@ namespace iTunesGoogleHome
         private void PlayMatchedAlbum(iTunesApp itunes, String album, String artist = null)
         {
             if (artist == null) Logger.WriteLine("Playing Album: " + album);
-            else Logger.WriteLine("Playing Album: " + album + ", By: " + artist);
+            else Logger.WriteLine("Playing Album: " + album + ", by " + artist);
 
             var tracks = new List<IITTrack>();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
