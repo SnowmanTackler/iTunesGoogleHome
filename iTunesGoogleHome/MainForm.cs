@@ -17,6 +17,7 @@ using PushbulletSharp.Models.Responses.WebSocket;
 using WebSocketSharp;
 
 using SamSeifert.Utilities;
+using SamSeifert.Utilities.Extensions;
 using Logger = SamSeifert.Utilities.Logger;
 
 namespace iTunesGoogleHome

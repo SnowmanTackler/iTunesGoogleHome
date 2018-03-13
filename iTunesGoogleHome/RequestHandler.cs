@@ -11,6 +11,7 @@ using PushbulletSharp.Models.Responses;
 
 using SamSeifert.Utilities;
 using SamSeifert.Utilities.DataStructures;
+using SamSeifert.Utilities.Extensions;
 
 namespace iTunesGoogleHome
 {
@@ -43,7 +44,7 @@ namespace iTunesGoogleHome
                     Logger.WriteLine("Next Track");
                     break;
                 case "pause":
-                    new iTunesAppClass()?.Stop();
+                    new iTunesAppClass()?.Pause();
                     Logger.WriteLine("Pause");
                     break;
                 case "louder":
@@ -240,7 +241,7 @@ namespace iTunesGoogleHome
                 itunes = new iTunesAppClass();
 
             using (Logger.Time("Pausing iTunes"))
-                itunes.Stop(); // Makes it seem more responsive
+                itunes.Pause(); // Makes it seem more responsive
 
             if (this._FirstSearch) this.RefreshItunesData(itunes);
             this._FirstSearch = false;
