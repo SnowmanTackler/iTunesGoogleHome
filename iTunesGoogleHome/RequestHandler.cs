@@ -159,6 +159,11 @@ namespace iTunesGoogleHome
                         _Artists["the wet cat"] = track.Artist;
                     }
 
+                    if (artist_key.Length > 4) // the red hot chili peppers -> red hot chili peppers
+                        if (artist_key.Substring(0, 4) == "the ")
+                            _Artists[artist_key.Substring(4)] = track.Artist;
+
+
                     String jjoined_key;
                     String jjoined_val;
 
