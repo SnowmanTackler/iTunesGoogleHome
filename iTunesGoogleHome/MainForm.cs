@@ -41,6 +41,8 @@ namespace iTunesGoogleHome
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            this.LoadFormState();
+
             Logger.AddTab();
             
             var tb = this.tbConsole;
@@ -49,7 +51,6 @@ namespace iTunesGoogleHome
                 MainForm.ThreadSafeTextBoxWrite(tb, ln, tab);
             });
 
-            this.LoadFormState();
 
             this.tbPushBullet.Text = TextSettings.Read("pbkey.txt") ?? "";
             this.ActiveControl = this.label1; // Prevents textbox text from starting highlighted

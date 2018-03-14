@@ -65,7 +65,7 @@ namespace iTunesGoogleHome
                     var trimmed = push.Body?.Trim() ?? "";
                     if (trimmed.Length == 0)
                     {
-                        new iTunesAppClass()?.Resume();
+                        new iTunesAppClass()?.Play();
                         Logger.WriteLine("Empty Play");
                     }
                     else
