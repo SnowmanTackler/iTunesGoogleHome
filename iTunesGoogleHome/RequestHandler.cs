@@ -146,43 +146,58 @@ namespace iTunesGoogleHome
                         ;
                     };
 
-                    string song_key = to_key(track.Name);
-                    string artist_key = to_key(track.Artist);
-                    string album_key = to_key(track.Album);
+                    string artist_key = null;
 
-                    _Artists[artist_key] = track.Artist;
-                    _Artists["artist " + artist_key] = track.Artist;
-
-                    if ("alanis morissette" == artist_key)
+                    if (track.Artist != null)
                     {
-                        _Artists["wet cat"] = track.Artist;
-                        _Artists["the wet cat"] = track.Artist;
+                        artist_key = to_key(track.Artist);
+                        _Artists[artist_key] = track.Artist;
+                        _Artists["artist " + artist_key] = track.Artist;
+
+                        if ("alanis morissette" == artist_key)
+                        {
+                            _Artists["wet cat"] = track.Artist;
+                            _Artists["the wet cat"] = track.Artist;
+                        }
+
+                        if (artist_key.Length > 4) // the red hot chili peppers -> red hot chili peppers
+                            if (artist_key.Substring(0, 4) == "the ")
+                                _Artists[artist_key.Substring(4)] = track.Artist;
+
                     }
-
-                    if (artist_key.Length > 4) // the red hot chili peppers -> red hot chili peppers
-                        if (artist_key.Substring(0, 4) == "the ")
-                            _Artists[artist_key.Substring(4)] = track.Artist;
-
 
                     String jjoined_key;
                     String jjoined_val;
 
-                    if (use_songs) // Songs too slow on home computer.  Don't populate List
+                    if (use_songs && (track.Name != null)) // Songs too slow on home computer.  Don't populate List
                     {
+                        string song_key = to_key(track.Name);
                         _Songs[song_key] = track.Name;
                         _Songs["song " + song_key] = track.Name;
-                        jjoined_key = jjoin(song_key, artist_key);
-                        jjoined_val = jjoin(track.Name, track.Artist);
-                        _Song_Artists[jjoined_key] = jjoined_val;
-                        _Song_Artists["song " + jjoined_key] = jjoined_val;
+
+                        if (artist_key != null)
+                        {
+                            jjoined_key = jjoin(song_key, artist_key);
+                            jjoined_val = jjoin(track.Name, track.Artist);
+                            _Song_Artists[jjoined_key] = jjoined_val;
+                            _Song_Artists["song " + jjoined_key] = jjoined_val;
+                        }
                     }
 
-                    _Albums[album_key] = track.Album;
-                    _Albums["album " + album_key] = track.Album;
-                    jjoined_key = jjoin(album_key, artist_key);
-                    jjoined_val = jjoin(track.Album, track.Artist);
-                    _Album_Artists[jjoined_key] = jjoined_val;
-                    _Album_Artists["album " + jjoined_key] = jjoined_val;
+                    if (track.Album != null)
+                    {
+                        string album_key = to_key(track.Album);
+                        _Albums[album_key] = track.Album;
+                        _Albums["album " + album_key] = track.Album;
+
+                        if (artist_key != null)
+                        {
+                            jjoined_key = jjoin(album_key, artist_key);
+                            jjoined_val = jjoin(track.Album, track.Artist);
+                            _Album_Artists[jjoined_key] = jjoined_val;
+                            _Album_Artists["album " + jjoined_key] = jjoined_val;
+                        }
+                    }
                 }
 
                 // get list of all playlists defined in 
@@ -192,6 +207,7 @@ namespace iTunesGoogleHome
                     switch (pl.Name)
                     {
                         // Defaults.  Ignore these
+                        case null:
                         case "Library": 
                         case "Music":
                         case "Movies":
