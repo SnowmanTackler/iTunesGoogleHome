@@ -34,10 +34,9 @@ namespace iTunesGoogleHome
             this.tbMatches = matches;
         }
 
-
-        public void NewNotification(PushResponse push)
+        public void NewNotification(String title, String body)
         {
-            switch (push.Title)
+            switch (title)
             {
                 case "next":
                     new iTunesAppClass()?.NextTrack();
@@ -62,7 +61,7 @@ namespace iTunesGoogleHome
                 case "play all songs":
                 case "play songs":
                 case "play itunes":
-                    var trimmed = push.Body?.Trim() ?? "";
+                    var trimmed = body?.Trim() ?? "";
                     if (trimmed.Length == 0)
                     {
                         new iTunesAppClass()?.Play();
@@ -74,7 +73,7 @@ namespace iTunesGoogleHome
                     }
                     break;
                 default:
-                    Logger.WriteError(this, "Unrecognized Title: " + push.Title);
+                    Logger.WriteError(this, "Unrecognized Title: " + title);
                     break;
             }
         }
@@ -153,6 +152,7 @@ namespace iTunesGoogleHome
                         artist_key = to_key(track.Artist);
                         _Artists[artist_key] = track.Artist;
                         _Artists["artist " + artist_key] = track.Artist;
+                        _Artists["songs by " + artist_key] = track.Artist;
 
                         if ("alanis morissette" == artist_key)
                         {
@@ -385,14 +385,19 @@ namespace iTunesGoogleHome
             if (artist == null) Logger.WriteLine("Playing Song: " + song);
             else Logger.WriteLine("Playing Song: " + song + ", by " + artist);
 
+            var pl = this.SetupAutomatedPlaylist(itunes);
+
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
-            foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
+            foreach (IITTrack track_o in itunes.LibraryPlaylist.Tracks)
             {
-                if (track.Kind != ITTrackKind.ITTrackKindFile) continue;
-                if (track.Name != song) continue;
+                if (track_o.Kind != ITTrackKind.ITTrackKindFile) continue;
+                if (track_o.Name != song) continue;
+                var track = new SamTrack(track_o);
                 if (artist != null)
-                    if (track.Artist != artist) continue;
-                this.SetupAndRunAutomatedPlaylist(itunes, track);
+                    if (track._Artist != artist) continue;
+
+                this.AddToPlaylist(pl, track);
+                this.PlayPlaylist(pl);
                 return;
             }
             this.RefreshItunesData(itunes);
@@ -403,17 +408,24 @@ namespace iTunesGoogleHome
             if (artist == null) Logger.WriteLine("Playing Album: " + album);
             else Logger.WriteLine("Playing Album: " + album + ", by " + artist);
 
-            var tracks = new List<IITTrack>();
+            var pl = this.SetupAutomatedPlaylist(itunes);
+
+            var tracks = new List<SamTrack>();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
-            foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
+            foreach (IITTrack track_o in itunes.LibraryPlaylist.Tracks)
             {
-                if (track.Kind != ITTrackKind.ITTrackKindFile) continue;
-                if (track.Album != album) continue;
+                if (track_o.Kind != ITTrackKind.ITTrackKindFile) continue;
+                var track = new SamTrack(track_o);
+                if (track._Album != album) continue;
                 if (artist != null)
-                    if (track.Artist != artist) continue;
+                    if (track._Artist != artist) continue;
                 tracks.Add(track);
             }
-            if (tracks.Count > 0) this.SetupAndRunAutomatedPlaylist(itunes, tracks.ToArray());
+            if (tracks.Count > 0)
+            {
+                this.AddToPlaylist(pl, tracks.ToArray());
+                this.PlayPlaylist(pl);
+            }
             else this.RefreshItunesData(itunes);
         }
 
@@ -421,19 +433,35 @@ namespace iTunesGoogleHome
         {
             Logger.WriteLine("Playing Artist: " + artist);
 
-            var tracks = new List<IITTrack>();
+            var pl = this.SetupAutomatedPlaylist(itunes);
+
+            var tracks = new List<SamTrack>();
             // Rather than storing the handle (will be incorrect when itunes closes and is reopened, just find playlist by searching!
-            foreach (IITTrack track in itunes.LibraryPlaylist.Tracks)
+            foreach (IITTrack track_o in itunes.LibraryPlaylist.Tracks)
             {
-                if (track.Kind != ITTrackKind.ITTrackKindFile) continue;
-                if (track.Artist != artist) continue;
+                if (track_o.Kind != ITTrackKind.ITTrackKindFile) continue;
+                var track = new SamTrack(track_o);
+                if (track._Artist != artist) continue;
                 tracks.Add(track);
             }
-            if (tracks.Count > 0) this.SetupAndRunAutomatedPlaylist(itunes, tracks.ToArray());
+            if (tracks.Count > 0)
+            {
+                this.AddToPlaylist(pl, tracks.ToArray());
+                this.PlayPlaylist(pl);
+            }
             else this.RefreshItunesData(itunes);
         }
 
-        public void SetupAndRunAutomatedPlaylist(iTunesApp itunes, params IITTrack[] tracks)
+        /// <summary>
+        /// It is critical to make the playlist, then iterate through all the itunes songs to find the 
+        /// specific songs for that playlist.  If you iterate through itunes first, then make the playlist,
+        /// then add the songs you find, you occasionally get an "item was deleted" COMException.  I belive
+        /// this is because itunes identifies songs by 4 id's, including what playlist they are from, and
+        /// when the LibraryPlaylist gets switched around the references break.
+        /// </summary>
+        /// <param name="itunes"></param>
+        /// <returns></returns>
+        public IITUserPlaylist SetupAutomatedPlaylist(iTunesApp itunes)
         {
             IITUserPlaylist pl;
 
@@ -448,17 +476,20 @@ namespace iTunesGoogleHome
                 }
                 pl?.Delete();
             }
-            while (pl != null);
+            while (pl != null); // do loop
 
-            var sortable_tracks = tracks.Select(t => new SamTrack(t)).Sorted();
-            pl = (IITUserPlaylist)(itunes.CreatePlaylist(automated_playlist_name));
+            return (IITUserPlaylist)(itunes.CreatePlaylist(automated_playlist_name));
+        }
+
+        public void AddToPlaylist(IITUserPlaylist pl, params SamTrack[] sortable_tracks)
+        { 
+            Array.Sort(sortable_tracks);
+
             foreach (var t in sortable_tracks)
             {
                 object track = t._Track;
                 pl.AddTrack(ref track);
             }
-
-            this.PlayPlaylist(pl);
         }
 
         private void PlayPlaylist(IITPlaylist pl)
@@ -482,9 +513,9 @@ namespace iTunesGoogleHome
         public class SamTrack : IComparable
         {
             public readonly IITTrack _Track;
-            private string _Album = null;
-            private string _Artist = null;
-            private int _TrackNumber = int.MinValue;
+            public readonly string _Album = null;
+            public readonly string _Artist = null;
+            public readonly int _TrackNumber = int.MinValue;
 
             public SamTrack(IITTrack t)
             {

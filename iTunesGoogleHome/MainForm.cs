@@ -32,6 +32,10 @@ namespace iTunesGoogleHome
 
         private readonly PushHandler _RequestHandler;
 
+#if DEBUG
+        bool _FakingRequests = false;
+#endif
+
         public MainForm()
         {
             InitializeComponent();
@@ -56,10 +60,18 @@ namespace iTunesGoogleHome
             this.ActiveControl = this.label1; // Prevents textbox text from starting highlighted
 
             this.bStartPushbullet_Click(sender, e);
+
+#if !DEBUG
+            this.bTest.RemoveFromParent();
+            this.bTest = null;
+#endif
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+#if DEBUG
+            {
+#else
             if ((!_HesDeadJim) && (this.Visible))
             {
                 this.Hide();
@@ -67,6 +79,7 @@ namespace iTunesGoogleHome
             }
             else
             {
+#endif
                 this.CeaseAndDesist();
             }
         }
@@ -102,9 +115,13 @@ namespace iTunesGoogleHome
                 }
 
                 if (!this.tbPushBullet.IsDisposed)
-                {
-                    TextSettings.Save("pbkey.txt", this.tbPushBullet.Text);
-                }
+#if DEBUG
+                    if (!this._FakingRequests)
+#endif
+                        { 
+
+                            TextSettings.Save("pbkey.txt", this.tbPushBullet.Text);
+                        }
             }
         }
 
@@ -188,7 +205,7 @@ namespace iTunesGoogleHome
                                     {
                                         try
                                         {
-                                            this._RequestHandler.NewNotification(push);
+                                            this._RequestHandler.NewNotification(push.Title, push.Body);
                                             break;
                                         }
                                         catch (Exception exc)
@@ -212,6 +229,51 @@ namespace iTunesGoogleHome
                     Logger.WriteLine("PushBullet type not supported!");
                     break;
             }
+        }
+
+        private void bTest_Click(object sender, EventArgs e)
+        {
+#if DEBUG
+            this._FakingRequests = true;
+            this.label1.Text = "Fake Query:";
+
+            var text = this.tbPushBullet.Text.Trim();
+
+            if (text.Length == 0)
+                this.tbPushBullet.Text = "play, artist adele";
+
+            var str_split = this.tbPushBullet.Text.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (str_split.Length == 0)
+                return;
+
+            String title = str_split[0];
+            String body = null;
+            if (str_split.Length > 1)
+                body = str_split[1];
+
+            using (Logger.Time("Processing Request"))
+            {
+                for (int i = 0; i < 3; i++) // 3 attempts.
+                {
+                    using (Logger.Time("Attempt " + i))
+                    {
+                        //try
+                        {
+                            this._RequestHandler.NewNotification(title, body);
+                            break;
+                        }
+                        /*
+                        catch (Exception exc)
+                        {
+                            Logger.WriteException(this, "FindBestMatchAndPlay", exc);
+                            System.Threading.Thread.Sleep(500); // Give itunes a breath.
+                        }
+                        //*/
+                    }
+                }
+            }
+#endif
         }
     }
 }

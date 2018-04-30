@@ -35,6 +35,7 @@
             this.tbConsole = new System.Windows.Forms.TextBox();
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
             this.label1 = new System.Windows.Forms.Label();
+            this.bTest = new System.Windows.Forms.Button();
             this.tbMatches = new System.Windows.Forms.TextBox();
             this.tableLayoutPanel2 = new System.Windows.Forms.TableLayoutPanel();
             this.label2 = new System.Windows.Forms.Label();
@@ -94,6 +95,7 @@
             this.tableLayoutPanel1.Controls.Add(this.tbPushBullet, 1, 1);
             this.tableLayoutPanel1.Controls.Add(this.bStartPushbullet, 2, 1);
             this.tableLayoutPanel1.Controls.Add(this.label1, 0, 1);
+            this.tableLayoutPanel1.Controls.Add(this.bTest, 2, 2);
             this.tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Top;
             this.tableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
             this.tableLayoutPanel1.Name = "tableLayoutPanel1";
@@ -115,6 +117,18 @@
             this.label1.TabIndex = 2;
             this.label1.Text = "PushBullet Secret:";
             this.label1.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
+            // bTest
+            // 
+            this.bTest.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.bTest.Location = new System.Drawing.Point(406, 42);
+            this.bTest.Margin = new System.Windows.Forms.Padding(0);
+            this.bTest.Name = "bTest";
+            this.bTest.Size = new System.Drawing.Size(200, 10);
+            this.bTest.TabIndex = 3;
+            this.bTest.Text = "Test";
+            this.bTest.UseVisualStyleBackColor = true;
+            this.bTest.Click += new System.EventHandler(this.bTest_Click);
             // 
             // tbMatches
             // 
@@ -234,6 +248,7 @@
         private System.Windows.Forms.NotifyIcon _NotifyIcon;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
         private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;
+        private System.Windows.Forms.Button bTest;
     }
 }
 
