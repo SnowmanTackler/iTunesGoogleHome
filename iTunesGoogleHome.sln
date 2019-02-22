@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.421
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iTunesGoogleHome", "iTunesGoogleHome\iTunesGoogleHome.csproj", "{4AD4F443-6D6E-4D1A-9E9E-2A598E9AFC34}"
 EndProject
@@ -11,7 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "websocket-sharp", "Librarie
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SamSeifert.Utilities", "Libraries\SamSeifert.Utilities\SamSeifert.Utilities.csproj", "{A9446CBE-818F-45F6-8894-068693DA47CA}"
 EndProject
-Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "iTunesGoogleHomeSetup", "iTunesGoogleHomeSetup\iTunesGoogleHomeSetup.vdproj", "{C046F482-54A1-460D-83A2-91DD1EC78B31}"
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "iTunesGoogleHomeSetup", "iTunesGoogleHomeSetup\iTunesGoogleHomeSetup.vdproj", "{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,12 +53,19 @@ Global
 		{A9446CBE-818F-45F6-8894-068693DA47CA}.Release_Ubuntu|Any CPU.Build.0 = Release|Any CPU
 		{A9446CBE-818F-45F6-8894-068693DA47CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A9446CBE-818F-45F6-8894-068693DA47CA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C046F482-54A1-460D-83A2-91DD1EC78B31}.Debug_Ubuntu|Any CPU.ActiveCfg = Debug
-		{C046F482-54A1-460D-83A2-91DD1EC78B31}.Debug|Any CPU.ActiveCfg = Debug
-		{C046F482-54A1-460D-83A2-91DD1EC78B31}.Release_Ubuntu|Any CPU.ActiveCfg = Release
-		{C046F482-54A1-460D-83A2-91DD1EC78B31}.Release|Any CPU.ActiveCfg = Release
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Debug_Ubuntu|Any CPU.ActiveCfg = Debug
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Debug_Ubuntu|Any CPU.Build.0 = Debug
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Debug|Any CPU.ActiveCfg = Debug
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Debug|Any CPU.Build.0 = Debug
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Release_Ubuntu|Any CPU.ActiveCfg = Release
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Release_Ubuntu|Any CPU.Build.0 = Release
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Release|Any CPU.ActiveCfg = Release
+		{B1455893-B6E7-424D-A71D-AF2F2D7BEFE6}.Release|Any CPU.Build.0 = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CF40F203-01AF-4324-801F-AC07D88AD8DA}
 	EndGlobalSection
 EndGlobal

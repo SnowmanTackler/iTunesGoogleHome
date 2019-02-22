@@ -29,8 +29,11 @@ namespace iTunesGoogleHome
         private WebSocket ws;
 
         private volatile bool _HesDeadJim = false;
+        private bool hasHiddenOnStartup = false;
 
         private readonly PushHandler _RequestHandler;
+
+        private static readonly String fileName = "pbkey.txt";
 
 #if DEBUG
         bool _FakingRequests = false;
@@ -55,8 +58,8 @@ namespace iTunesGoogleHome
                 MainForm.ThreadSafeTextBoxWrite(tb, ln, tab);
             });
 
-
-            this.tbPushBullet.Text = TextSettings.Read("pbkey.txt") ?? "";
+            Logger.WriteLine("Loading access token from: " + Path.Combine(TextSettings.Folder, fileName));
+            this.tbPushBullet.Text = TextSettings.Read(fileName) ?? "";
             this.ActiveControl = this.label1; // Prevents textbox text from starting highlighted
 
             this.bStartPushbullet_Click(sender, e);
@@ -100,6 +103,15 @@ namespace iTunesGoogleHome
             }
         }
 
+        private void CloseConnections()
+        {
+            if (this.ws != null)
+            {
+                (this.ws as IDisposable).Dispose();
+                this.ws = null;
+            }
+        }
+
         private void CeaseAndDesist()
         {
             if (!this._HesDeadJim)
@@ -108,20 +120,7 @@ namespace iTunesGoogleHome
 
                 this.SaveFormState();
 
-                if (this.ws != null)
-                {
-                    (this.ws as IDisposable).Dispose();
-                    this.ws = null;
-                }
-
-                if (!this.tbPushBullet.IsDisposed)
-#if DEBUG
-                    if (!this._FakingRequests)
-#endif
-                        { 
-
-                            TextSettings.Save("pbkey.txt", this.tbPushBullet.Text);
-                        }
+                this.CloseConnections();            
             }
         }
 
@@ -148,20 +147,11 @@ namespace iTunesGoogleHome
             string key = this.tbPushBullet.Text.Trim();
             if (key.Length > 0)
             {
+                this.CloseConnections();
                 this.Client = new PushbulletClient(key, TimeZoneInfo.Local);
                 ws = new WebSocket(string.Concat("wss://stream.pushbullet.com/websocket/", key));
                 ws.OnMessage += Ws_OnMessage;
                 ws.Connect();
-                this.bStartPushbullet.Enabled = false;
-
-                // When We Connect, Hide (helpful on startup)
-                Action act = () => { this.Hide(); };
-                System.Threading.Timer timer = null;
-                timer = new System.Threading.Timer((obj) =>
-                {
-                    this.BeginInvoke(act);
-                    timer.Dispose();
-                }, null, 250, System.Threading.Timeout.Infinite);
             }
         }
 
@@ -180,8 +170,15 @@ namespace iTunesGoogleHome
             switch (response.Type)
             {
                 // Heartbeat
-                case "nop":
-                    Logger.WriteLine("PushBullet Heartbeat");
+                case "nop":                
+                    Logger.WriteLine("PushBullet Heartbeat");                
+                    if (!this.hasHiddenOnStartup)
+                    {
+                        this.hasHiddenOnStartup = true;
+                        this.Hide();
+                        Logger.WriteLine("Saving access token to: " + Path.Combine(TextSettings.Folder, fileName));
+                        TextSettings.Save(fileName, this.Client.AccessToken);
+                    }
                     break;
                 case "tickle":
                     PushResponseFilter filter = new PushResponseFilter()
